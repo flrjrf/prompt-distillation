@@ -20,17 +20,16 @@ from evaluation.utils import get_gt_answer, get_rag_context
 
 MAX_FAILURES = 20
 
-
 def _extract_questions(text: str) -> List[str]:
     questions = re.findall(r'<question>(.*?)<\/question>', text, re.DOTALL)
     return questions
 
 
 def _generate_prompt_async(context: str, llm: LLM) -> str:
-    prompt = f"""Here is a paragraph of text:
+    prompt = f"""Here is a chunk of text:
 {context}
 
-Please generate challenging five trivia questions based on this paragraph. Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the paragraph. The questions must be understandable without access to the text. Do not output anything except the questions and format your output as in the followimg example:
+Please generate challenging five trivia questions based on this text. Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the paragraph. The questions must be understandable without access to the text. Do not output anything except the questions and format your output as in the followimg example:
 <question>What is the capital of Japan?</question>
 <question>How many months are there in a year?</question>
 <question>What was the first name of Reagan?</question>
@@ -72,6 +71,7 @@ async def _sample_questions(
             done += 1
         else:
             failures += 1
+            print(f"Failure: {text[:100]}", flush=True)
             if failures >= MAX_FAILURES:
                 print("[WARN] too many failed generations for a prompt – skipping")
                 break
@@ -79,7 +79,7 @@ async def _sample_questions(
 
 
 def main(
-    base: str = "llama3-8b-instruct",
+    base: str = "Qwen/Qwen3-4B-Instruct-2507",
     dataset_family: str = "squadshifts",
     dataset: str = "nyt",
     max_items: int = 1000,
@@ -91,7 +91,7 @@ def main(
     cfg = get_model_config(base)
     llm = LLM(base, opening_message=Message(Role.SYSTEM, cfg.system_message))
 
-    client = AsyncOpenAI(base_url=f"http://{vllm_hostname}:8000/v1", api_key="token-abc123")
+    client = AsyncOpenAI(base_url=f"http://{vllm_hostname}:8000/v1", api_key="EMPTY")
     extra_body = generate_extra_body(base)
     output_directory_name = f"{dataset_family}_{dataset}"
 
@@ -122,7 +122,6 @@ def main(
     
     questions_written = 0
     print(f"Output file for questions: {output_file}", flush=True)
-    print(f"Starting to generate questions to be written into {output_file}", flush=True)
     contexts = []
     prompts = []
     for i, item in enumerate(ds):
@@ -133,6 +132,8 @@ def main(
     for context in contexts:
         prompts.append(_generate_prompt_async(context, llm))
 
+    print(prompts)
+    print(f"Starting to generate questions to be written into {output_file}", flush=True)
     start_time = time.time()
     questions_per_paragraph = asyncio.run(
         async_wrapper(

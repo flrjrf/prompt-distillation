@@ -38,7 +38,7 @@ async def async_wrapper(
     temperature: float,
     max_tokens: int,
     *,
-    batch_size: int = 50,
+    batch_size: int = 1000,
     temp_file: Optional[str] = None,
     custom_fnc: Optional[Callable[..., Awaitable[str]]] = None,
     custom_fnc_extra_kwargs: Optional[dict[str, Any]] = None,

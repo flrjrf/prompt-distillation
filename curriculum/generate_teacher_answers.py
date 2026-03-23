@@ -112,7 +112,7 @@ def setup_models(base: str) -> Tuple[LLM, vLLM]:
 
 
 def main(
-    base: str = "llama3-8b-instruct",
+    base: str = "Qwen/Qwen3-4B-Instruct-2507",
     generate_lesson: bool = False,
     generate_exam: bool = False,
     lesson_num_choices: int = 1,
@@ -124,7 +124,7 @@ def main(
     dataset_family: str = "squadshifts",
     dataset: str = "nyt",
     variant: str = "default",
-    question_model: str = "llama3-8b-instruct",
+    question_model: str = "Qwen3-4B-Instruct-2507",
     max_items: int = 1000,
     train_questions: int = 30,
     question_temperature: float = 1.5,

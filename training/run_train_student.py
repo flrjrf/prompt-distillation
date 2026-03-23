@@ -16,7 +16,7 @@ from training.train_student import train
 
 def main(
     # This is the student model being trained 
-    base: str = "llama3-8b-instruct",
+    base: str = "Qwen/Qwen3-4B-Instruct-2507",
     project_name: str = "huggingface",
     group_name: str = None,
     eval_interval: int = -1,
@@ -41,8 +41,8 @@ def main(
     warmup_ratio: float = 0.1,
     run_name: str = None,
     # dataset specification
-    lesson_model: str = "llama3-8b-instruct",
-    exam_model: str = "llama3-8b-instruct",
+    lesson_model: str = "Qwen3-4B-Instruct-2507",
+    exam_model: str = "Qwen3-4B-Instruct-2507",
     dataset: str = "nyt",
     dataset_family: str = "squadshifts",
     variant: str = "default",
@@ -62,7 +62,7 @@ def main(
     checkpoint_interval_seconds: int = 0,
     datapath: Path = Path("data"),
     # question generating model
-    question_model: str = "llama3-8b-instruct",
+    question_model: str = "Qwen3-4B-Instruct-2507",
     question_temperature: float = 1.5,
     train_questions: int = 30,
     max_items_train: int = 1000,

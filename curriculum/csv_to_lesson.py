@@ -66,7 +66,7 @@ def main(
     dataset: str = "nyt",
     dataset_family: str = "squadshifts",
     temperature: float = 1.5,
-    model: str = "llama3-8b-instruct",
+    model: str = "Qwen3-4B-Instruct-2507",
     train_questions: int = 30,
     max_items: int = 1000,
     variant: str = "default"
