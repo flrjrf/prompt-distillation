@@ -1,1 +1,1 @@
-srun -G 8 -p j01 --pty bash
+srun -G 1 -p j01 -t 01:00:00 --pty bash

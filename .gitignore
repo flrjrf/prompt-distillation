@@ -213,3 +213,6 @@ questions/
 outputs/
 checkpoints/
 curriculum/*xml
+
+datasets/kalamang
+.claude
