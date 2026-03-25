@@ -10,8 +10,15 @@ def generate_lesson_name(
     temperature: float,
     max_items: int,
     idx: Optional[int] = None,
+    chunk_size: Optional[int] = None,
+    chunking_method: Optional[str] = None,
 ) -> str:
-    name = f"{dataset_family}_{dataset}_{variant}_{model}_{questions}_{temperature}_{max_items}_train"
+    name_parts = [dataset_family, dataset, variant, model, questions, temperature, max_items]
+    if chunk_size is not None:
+        name_parts.append(f"chunk{chunk_size}")
+    if chunking_method is not None:
+        name_parts.append(chunking_method)
+    name = "_".join(str(p) for p in name_parts) + "_train"
     if idx is not None:
         name += f"_{idx}"
     return name
@@ -42,12 +49,19 @@ def generate_question_path(
     model: str,
     questions: int,
     temperature: float,
-    max_items: int
+    max_items: int,
+    chunk_size: Optional[int] = None,
+    chunking_method: Optional[str] = None,
 ) -> str:
-    if max_items:
-        return f"questions/{dataset_family}_{dataset}/{model}/questions_{questions}_{temperature}_{max_items}.csv"
+    if dataset_family == "mtob":
+        folder = f"mtob_{dataset}_{chunk_size}_{chunking_method}"
     else:
-        return f"questions/{dataset_family}_{dataset}/{model}/questions_{questions}_{temperature}.csv"
+        folder = f"{dataset_family}_{dataset}"
+
+    if max_items:
+        return f"questions/{folder}/{model}/questions_{questions}_{temperature}_{max_items}.csv"
+    else:
+        return f"questions/{folder}/{model}/questions_{questions}_{temperature}.csv"
 
 def generate_augmented_filename(
     lesson_filename: str,

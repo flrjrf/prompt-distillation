@@ -216,3 +216,5 @@ curriculum/*xml
 
 datasets/kalamang
 .claude
+flrutils/**.csv
+flrutils/**.json

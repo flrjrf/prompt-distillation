@@ -8,4 +8,6 @@
 source ~/fulianren/setup.sh
 source .venv/bin/activate
 
-python training/run_train_student.py --run_name example --use_wandb True
+python evaluation_sample_questions --vllm-hostname 0.0.0.0 & python
+
+# python training/run_train_student.py --run_name example --use_wandb True

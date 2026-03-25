@@ -31,7 +31,9 @@ def create_xml(
     questions: int,
     temperature: float,
     max_items: int,
-    variant: str
+    variant: str,
+    chunk_size: int = None,
+    chunking_method: str = None,
 ) -> str:
     """Read CSV, create XML lessons, and return XML as string."""
     lessons = Element('lessons')
@@ -46,7 +48,7 @@ def create_xml(
                 continue
             lesson = SubElement(
                 lessons, 'lesson',
-                id=generate_lesson_name(dataset_family, dataset, variant, model, questions, temperature, max_items, i),
+                id=generate_lesson_name(dataset_family, dataset, variant, model, questions, temperature, max_items, i, chunk_size, chunking_method),
             )
             material = SubElement(lesson, 'material')
             if variant == "cot":
@@ -69,17 +71,19 @@ def main(
     model: str = "Qwen3-4B-Instruct-2507",
     train_questions: int = 30,
     max_items: int = 1000,
-    variant: str = "default"
+    variant: str = "default",
+    chunk_size: int = None,
+    chunking_method: str = None,
 ) -> None:
     """Convert CSV to pretty-printed XML lessons for curriculum generation."""
     if variant not in ["default", "cot"]:
         raise ValueError(f"Unknown variant: {variant}")
 
-    input_path = generate_question_path(dataset_family, dataset, model, train_questions, temperature, max_items)
-    output_path = generate_lesson_filename(dataset_family, dataset, variant, model, train_questions, temperature, max_items)
+    input_path = generate_question_path(dataset_family, dataset, model, train_questions, temperature, max_items, chunk_size, chunking_method)
+    output_path = generate_lesson_filename(dataset_family, dataset, variant, model, train_questions, temperature, max_items, chunk_size, chunking_method)
 
     print(f"Processing {input_path}")
-    xml_output = create_xml(dataset_family, dataset, input_path, model, train_questions, temperature, max_items, variant)
+    xml_output = create_xml(dataset_family, dataset, input_path, model, train_questions, temperature, max_items, variant, chunk_size, chunking_method)
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(xml_output)
     print(f"XML written to {output_path}")
