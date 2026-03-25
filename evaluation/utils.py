@@ -114,6 +114,16 @@ def get_rag_context(
         sentences = item['context']['sentences']
         merged_sentences = ["".join(s) for s in sentences]
         return merged_sentences
+    elif dataset_family == "qasper":
+        title = item['title']
+        abstract = item['abstract']
+        body_dict = item['body_text']
+        section_names = body_dict["section_name"]
+        paragraphs = body_dict["paragraphs"]
+        output_text = title + "\n\n" + abstract + "\n\n"
+        for section_name, paragraph in zip(section_names, paragraphs):
+            output_text += f"{section_name}\n\n{paragraph}\n\n"
+        return [output_text]
     raise NotImplementedError(f"Unknown dataset family '{dataset_family}'.")
 
 

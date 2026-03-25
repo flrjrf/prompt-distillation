@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Set variables at the top
-INPUT_FILE="datasets/kalamang/resources/grammar_book.txt"
-CHUNK_SIZE=1024
+INPUT_FILE="datasets/kalamang/resources/grammar_book_combined.txt"
+CHUNK_SIZE=256
 MODE="sliding"
 OUTPUT_FILE="flrutils/grammar_book_chunks_${CHUNK_SIZE}_${MODE}.json"
 
