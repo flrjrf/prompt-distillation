@@ -8,12 +8,12 @@ from curriculum.csv_to_lesson import prettify
 from evaluation.utils import get_prompt_context
 
 def create_xml(
-    dataset_family: Literal["squadshifts", "hotpotqa"],
+    dataset_family: Literal["squadshifts", "hotpotqa", "qasper"],
     dataset: str,
     max_items: int,
     variant: Literal["default", "cot"] = "default",
 ) -> str:
-    """Create an XML exam file from a HuggingFace dataset, supporting squadshifts/hotpotqa and default/cot formats."""
+    """Create an XML exam file from a HuggingFace dataset, supporting squadshifts/hotpotqa/qasper and default/cot formats."""
     lessons = Element('lessons')
 
     # Dataset loading logic
@@ -21,6 +21,8 @@ def create_xml(
         hf_dataset = load_dataset(dataset_family, dataset, trust_remote_code=True)["test"]
     elif dataset_family == "hotpotqa":
         hf_dataset = load_dataset("hotpotqa/hotpot_qa", dataset, trust_remote_code=True)["validation"]
+    elif dataset_family == "qasper":
+        hf_dataset = load_dataset("allenai/qasper", trust_remote_code=True)[dataset]
     else:
         raise ValueError(f"Unknown dataset_family: {dataset_family}")
 
@@ -29,8 +31,13 @@ def create_xml(
         if i >= max_items > 0:
             break
 
-        # Support both squadshifts and hotpotqa fields
-        exercise = item['question']
+        # Extract question based on dataset family
+        if dataset_family == "qasper":
+            # QASPER has qas as a list of question/answer objects; use first question only
+            exercise = item['qas']['question'][0]  + " This question is about the paper titled '" + item['title'] + "'."
+        else:
+            # squadshifts and hotpotqa have direct 'question' field
+            exercise = item['question']
         context = get_prompt_context(item, dataset_family)
 
         # Format-specific lesson id and material
@@ -58,8 +65,8 @@ def create_xml(
 
 
 def main(
-    dataset_family: Literal["squadshifts", "hotpotqa"] = "squadshifts",
-    dataset: str = "nyt",
+    dataset_family: Literal["squadshifts", "hotpotqa", "qasper"] = "qasper",
+    dataset: str = "train",
     max_items: int = 1000,
     variant: Literal["default", "cot"] = "default"
 ) -> None:

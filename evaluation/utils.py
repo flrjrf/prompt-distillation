@@ -117,7 +117,7 @@ def get_rag_context(
     elif dataset_family == "qasper":
         title = item['title']
         abstract = item['abstract']
-        body_dict = item['body_text']
+        body_dict = item['full_text']
         section_names = body_dict["section_name"]
         paragraphs = body_dict["paragraphs"]
         output_text = title + "\n\n" + abstract + "\n\n"
@@ -140,6 +140,16 @@ def get_prompt_context(
         sentences = item['context']['sentences']
         merged_sentences = ["".join(s) for s in sentences]
         return "\n\n".join(merged_sentences)
+    elif dataset_family == "qasper":
+        title = item['title']
+        abstract = item['abstract']
+        body_dict = item['full_text']
+        section_names = body_dict["section_name"]
+        paragraphs = body_dict["paragraphs"]
+        output_text = title + "\n\n" + abstract + "\n\n"
+        for section_name, paragraph in zip(section_names, paragraphs):
+            output_text += f"{section_name}\n\n{paragraph}\n\n"
+        return output_text
     raise NotImplementedError(f"Unknown dataset family '{dataset_family}'.")
 
 
@@ -154,4 +164,7 @@ def get_gt_answer(
         return item['answers']['text']
     elif dataset_family == "hotpotqa":
         return item['answer']
+    elif dataset_family == "qasper":
+        # QASPER has qas as a list of question/answer objects; use answers from first question
+        return [ans['answer'] for ans in item['qas'][0]['answers']]
     raise NotImplementedError(f"Unknown dataset family '{dataset_family}'.")

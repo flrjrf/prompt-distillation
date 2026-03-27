@@ -50,9 +50,34 @@ Please generate challenging five trivia questions based on this text. If there a
 <question>What was the first name of Reagan?</question>
 <question>How many goals did Messi score during the calendar year 2012</question>
 <question>Where is the Santa Monica pier located?</question>"""
-    
+
     messages = [Message(Role.USER, prompt)]
     return llm.messages_to_prompt(messages)
+
+
+def _generate_prompt_async_qasper(context: str, llm: LLM) -> str:
+    prompt = f"""Here is a scientific paper:
+{context}
+
+Please generate challenging five trivia questions based on this paper. Focus on understanding the research methodology, key findings, contributions, and conclusions. Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the paper. The questions must be understandable without access to the text. Do not output anything except the questions and format your output as in the following example:
+<question>What is the capital of Japan?</question>
+<question>How many months are there in a year?</question>
+<question>What was the first name of Reagan?</question>
+<question>How many goals did Messi score during the calendar year 2012</question>
+<question>Where is the Santa Monica pier located?</question>"""
+
+    messages = [Message(Role.USER, prompt)]
+    return llm.messages_to_prompt(messages)
+
+
+def _get_prompt_generator(dataset_family: str):
+    """Return the appropriate prompt generator function based on dataset family."""
+    if dataset_family == "qasper":
+        return _generate_prompt_async_qasper
+    elif dataset_family == "mtob":
+        return _generate_prompt_async_kalamang
+    else:
+        return _generate_prompt_async
 
 
 async def _sample_questions(
@@ -101,7 +126,7 @@ def main(
     max_tokens: int = 512,
     train_questions: int = 30,
     temperature: float = 1.5,
-    vllm_hostname: str = "",
+    vllm_hostname: str = "0.0.0.0",
 ) -> None:
     cfg = get_model_config(base)
     llm = LLM(base, opening_message=Message(Role.SYSTEM, cfg.system_message))
@@ -114,10 +139,11 @@ def main(
         ds = load_dataset("squadshifts", dataset, trust_remote_code=True)["test"]
     elif dataset_family == "hotpotqa":
         ds = load_dataset("hotpotqa/hotpot_qa", dataset, trust_remote_code=True)["validation"]
+    elif dataset_family == "qasper":
+        ds = load_dataset("allenai/qasper", trust_remote_code=True)[dataset]
     elif dataset_family == "mtob":
         df = pd.read_csv(dataset)
         dataset = dataset.split("/")[-1].split(".")[0]
-
     else:
         raise NotImplementedError(f"Unknown dataset family '{dataset_family}'")
     
@@ -152,8 +178,10 @@ def main(
                 break
             contexts += get_rag_context(item, dataset_family=dataset_family)
 
+    # Get the appropriate prompt generator for this dataset family
+    prompt_generator = _get_prompt_generator(dataset_family)
     for context in contexts:
-        prompts.append(_generate_prompt_async_kalamang(context, llm))
+        prompts.append(prompt_generator(context, llm))
 
     print(prompts)
     print(f"Starting to generate questions to be written into {output_file}", flush=True)

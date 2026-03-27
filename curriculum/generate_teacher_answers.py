@@ -5,6 +5,9 @@ import warnings
 import xml.etree.ElementTree as ET
 from typing import List, Tuple, Dict
 
+# Increase vLLM logging verbosity before importing
+os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
+
 import torch
 from tqdm import tqdm
 from vllm import LLM as vLLM
