@@ -32,6 +32,7 @@ class StudentTeacherDataset(torch.utils.data.Dataset):
     """
     Dataset for training with exercises and teacher answers.
     Each sample includes both student and teacher prompts and answers.
+    Tokenizes on-the-fly in __getitem__ to reduce memory usage.
     """
     def __init__(
         self,
@@ -43,6 +44,8 @@ class StudentTeacherDataset(torch.utils.data.Dataset):
         debug: bool = False,
     ):
         assert isinstance(filenames, list), "filenames should be a list"
+        self.llm = llm
+        self.max_length = max_length
         self.samples: List[Dict[str, Any]] = []
         self.lesson_names: List[str] = []
         if verbose:
@@ -56,18 +59,15 @@ class StudentTeacherDataset(torch.utils.data.Dataset):
             lesson_ix = len(self.lesson_names) - 1
             exercises = read_exercises(filepath)
             training_pairs = 0
-            for exercise in exercises:
+            for i, exercise in enumerate(exercises):
                 question = extract_question(exercise.messages[-1])
-                prompt_with_tips = llm.messages_to_prompt(exercise.messages)
-                student_prompt_tokens, teacher_prompt_tokens = tokenize(prompt_with_tips, llm)
+                messages = exercise.messages  # Store raw messages, tokenize later
 
                 for choice in exercise.answer_choices:
-                    answer_tokens = prepare_answer_tokens(llm, choice.content, max_length, choice.truncated)
                     sample = {
-                        "student_prompt_tokens": student_prompt_tokens,
-                        "teacher_prompt_tokens": teacher_prompt_tokens,
-                        "answer_tokens": answer_tokens,
-                        "teacher_answer": choice.content,
+                        "messages": messages,
+                        "answer_content": choice.content,
+                        "answer_truncated": choice.truncated,
                         "lesson_ix": lesson_ix,
                         "question": question,
                     }
@@ -82,7 +82,19 @@ class StudentTeacherDataset(torch.utils.data.Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        return self.samples[idx]
+        """Tokenize on-the-fly to save memory."""
+        sample = self.samples[idx]
+        prompt_with_tips = self.llm.messages_to_prompt(sample["messages"])
+        student_prompt_tokens, teacher_prompt_tokens = tokenize(prompt_with_tips, self.llm)
+        answer_tokens = prepare_answer_tokens(
+            self.llm, sample["answer_content"], self.max_length, sample["answer_truncated"]
+        )
+        return {
+            "student_prompt_tokens": student_prompt_tokens,
+            "teacher_prompt_tokens": teacher_prompt_tokens,
+            "answer_tokens": answer_tokens,
+            "lesson_ix": sample["lesson_ix"],
+        }
 
     @staticmethod
     def collate_fn(samples, padding_value, llm):
@@ -91,8 +103,8 @@ class StudentTeacherDataset(torch.utils.data.Dataset):
         for sample in samples:
             student_prompt_tokens = sample["student_prompt_tokens"]
             seq = torch.cat([student_prompt_tokens, sample["answer_tokens"]], dim=1)
-            
-            # The response is the target 
+
+            # The response is the target
             labels = seq.clone()
             student_prompt_len = student_prompt_tokens.size(1)
             labels[0, :student_prompt_len] = IGNORE_INDEX
@@ -119,6 +131,7 @@ class TeacherDataset(torch.utils.data.Dataset):
     """
     Dataset for teacher-only training (token loss).
     Each sample is a prompt and single answer, optionally with distractor context.
+    Tokenizes on-the-fly in __getitem__ to reduce memory usage.
     """
     def __init__(
         self,
@@ -130,6 +143,8 @@ class TeacherDataset(torch.utils.data.Dataset):
         distractor_dataset: str = "",
     ):
         assert isinstance(filenames, list), "filenames should be a list"
+        self.llm = llm
+        self.max_length = max_length
         self.samples: List[Dict[str, Any]] = []
         self.lesson_names: List[str] = []
 
@@ -147,16 +162,12 @@ class TeacherDataset(torch.utils.data.Dataset):
             for exercise in exercises:
                 if len(exercise.answer_choices) != 1:
                     raise NotImplementedError("Multiple choices per answer are not currently supported in token loss training")
-               
-                answer_choice = exercise.answer_choices[0]
-                answer_tokens = prepare_answer_tokens(llm, answer_choice.content, max_length, answer_choice.truncated)
-                prompt_with_tips = llm.messages_to_prompt(exercise.messages)
-                student_prompt_tokens, teacher_prompt_tokens = tokenize(prompt_with_tips, llm)
 
+                answer_choice = exercise.answer_choices[0]
                 sample = {
-                    "prompt_tokens": teacher_prompt_tokens,
-                    "student_prompt_tokens": student_prompt_tokens,
-                    "answer_tokens": answer_tokens,
+                    "messages": exercise.messages,  # Store raw messages, tokenize later
+                    "answer_content": answer_choice.content,
+                    "answer_truncated": answer_choice.truncated,
                     "lesson_ix": lesson_ix,
                 }
 
@@ -180,7 +191,30 @@ class TeacherDataset(torch.utils.data.Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        return self.samples[idx]
+        """Tokenize on-the-fly to save memory."""
+        sample = self.samples[idx]
+        prompt_with_tips = self.llm.messages_to_prompt(sample["messages"])
+        student_prompt_tokens, teacher_prompt_tokens = tokenize(prompt_with_tips, self.llm)
+        answer_tokens = prepare_answer_tokens(
+            self.llm, sample["answer_content"], self.max_length, sample["answer_truncated"]
+        )
+
+        result = {
+            "teacher_prompt_tokens": teacher_prompt_tokens,
+            "student_prompt_tokens": student_prompt_tokens,
+            "answer_tokens": answer_tokens,
+            "lesson_ix": sample["lesson_ix"],
+        }
+
+        # Pass through raw data needed for distractor augmentation in collate_fn
+        if self.distractor_dataset:
+            result.update({
+                "question": sample["question"],
+                "material": sample["material"],
+                "prompt_placeholder": sample["prompt_placeholder"],
+            })
+
+        return result
 
     def collate_fn(self, samples, padding_value, llm, max_total_length=0):
         open_book_seqs = []
@@ -208,8 +242,8 @@ class TeacherDataset(torch.utils.data.Dataset):
                 prompt_len = prompt_tokens.size(1)
             else:
                 # use original tokens
-                open_book_seq = torch.cat([sample["prompt_tokens"], sample["answer_tokens"]], dim=1)
-                prompt_len = sample["prompt_tokens"].size(1)
+                open_book_seq = torch.cat([sample["teacher_prompt_tokens"], sample["answer_tokens"]], dim=1)
+                prompt_len = sample["teacher_prompt_tokens"].size(1)
 
             # Open-book targets: prompt + response, mask out prompt
             open_book_target_labels = open_book_seq.clone()

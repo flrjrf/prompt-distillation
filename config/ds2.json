@@ -13,7 +13,7 @@
         "offload_param": {
             "device": "none"
         },
-        "overlap_comm": true,
+        "overlap_comm": false,
         "contiguous_gradients": true,
         "reduce_bucket_size": "auto"
     },

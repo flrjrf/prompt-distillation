@@ -59,7 +59,7 @@ def _generate_prompt_async_qasper(context: str, llm: LLM) -> str:
     prompt = f"""Here is a scientific paper:
 {context}
 
-Please generate challenging five trivia questions based on this paper. Focus on understanding the research methodology, key findings, contributions, and conclusions. Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the paper. The questions must be understandable without access to the text. Do not output anything except the questions and format your output as in the following example:
+Please generate challenging five trivia questions based on this paper. Focus on understanding the research methodology, key findings, contributions, and conclusions. Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the paper. The questions must be understandable without additional context. Do not output anything except the questions and format your output as in the following example:
 <question>What is the capital of Japan?</question>
 <question>How many months are there in a year?</question>
 <question>What was the first name of Reagan?</question>
