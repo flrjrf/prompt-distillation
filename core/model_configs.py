@@ -54,6 +54,13 @@ MODEL_CONFIGS = {
         flag_name="qwen3_4b",
         lora_targets="all-linear",
     ),
+    "Qwen/Qwen3-8B": ModelConfig(
+        name="Qwen/Qwen3-8B",
+        vllm_model="Qwen/Qwen3-8B",
+        system_message="You are Qwen, created by Alibaba Cloud. You are a helpful assistant.",
+        flag_name="qwen3_8b",
+        lora_targets="all-linear",
+    ),
 }
 
 
@@ -70,5 +77,9 @@ def get_model_config(model_name: str) -> ModelConfig:
         return MODEL_CONFIGS[model_name]
     for k, v in MODEL_CONFIGS.items():
         if model_name in (v.name, v.vllm_model):
+            return v
+    # Try matching short name (part after the last '/')
+    for k, v in MODEL_CONFIGS.items():
+        if v.name.split('/')[-1] == model_name or v.vllm_model.split('/')[-1] == model_name:
             return v
     raise ValueError(f"Unknown model {model_name}")

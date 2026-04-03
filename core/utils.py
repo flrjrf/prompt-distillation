@@ -30,6 +30,8 @@ def generate_extra_body(base: str) -> Dict[str, Any]:
     }
     if 'llama3' in base.lower():
         extra_body["stop_token_ids"] = [128009]
+    if 'qwen3' in base.lower():
+        extra_body["chat_template_kwargs"] = {"enable_thinking": False}
     return extra_body
 
 

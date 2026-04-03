@@ -34,7 +34,7 @@ def create_xml(
         # Extract question based on dataset family
         if dataset_family == "qasper":
             # QASPER has qas as a list of question/answer objects; use first question only
-            exercise = item['qas']['question'][0]  + " This question is about the paper titled '" + item['title'] + "'."
+            exercise = item['qas']['question'][0] 
         else:
             # squadshifts and hotpotqa have direct 'question' field
             exercise = item['question']

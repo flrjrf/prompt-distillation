@@ -4,6 +4,7 @@ import logging
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 
+
 async def _generate_async(
     client: Any,
     model: str,
@@ -115,14 +116,23 @@ def get_rag_context(
         merged_sentences = ["".join(s) for s in sentences]
         return merged_sentences
     elif dataset_family == "qasper":
-        title = item['title']
-        abstract = item['abstract']
-        body_dict = item['full_text']
-        section_names = body_dict["section_name"]
-        paragraphs = body_dict["paragraphs"]
-        output_text = title + "\n\n" + abstract + "\n\n"
-        for section_name, paragraph in zip(section_names, paragraphs):
-            output_text += f"{section_name}\n\n{paragraph}\n\n"
+        title: str = item["title"]
+        abstract: str = item["abstract"]
+        section_names: list[str | None] = item["full_text"]["section_name"]
+        section_paragraphs: list[list[str]] = item["full_text"]["paragraphs"]
+        sections: list[str] = ["\n".join(section_paragraph) for section_paragraph in section_paragraphs]
+        output_text = f"{title}\n\n{abstract}"
+
+        figures_and_tables: str = "\n".join(item["figures_and_tables"]["caption"])
+        
+        for section_name, section in zip(section_names, sections):
+
+            if section_name:
+                output_text += f"\n\n{section_name}"
+            if section:
+                output_text += f"\n\n{section}"
+        
+        output_text += f"\n\n{figures_and_tables}"
         return [output_text]
     raise NotImplementedError(f"Unknown dataset family '{dataset_family}'.")
 
@@ -141,14 +151,23 @@ def get_prompt_context(
         merged_sentences = ["".join(s) for s in sentences]
         return "\n\n".join(merged_sentences)
     elif dataset_family == "qasper":
-        title = item['title']
-        abstract = item['abstract']
-        body_dict = item['full_text']
-        section_names = body_dict["section_name"]
-        paragraphs = body_dict["paragraphs"]
-        output_text = title + "\n\n" + abstract + "\n\n"
-        for section_name, paragraph in zip(section_names, paragraphs):
-            output_text += f"{section_name}\n\n{paragraph}\n\n"
+        title: str = item["title"]
+        abstract: str = item["abstract"]
+        section_names: list[str | None] = item["full_text"]["section_name"]
+        section_paragraphs: list[list[str]] = item["full_text"]["paragraphs"]
+        sections: list[str] = ["\n".join(section_paragraph) for section_paragraph in section_paragraphs]
+        output_text = f"{title}\n\n{abstract}"
+
+        figures_and_tables: str = "\n".join(item["figures_and_tables"]["caption"])
+        
+        for section_name, section in zip(section_names, sections):
+
+            if section_name:
+                output_text += f"\n\n{section_name}"
+            if section:
+                output_text += f"\n\n{section}"
+        
+        output_text += f"\n\n{figures_and_tables}"
         return output_text
     raise NotImplementedError(f"Unknown dataset family '{dataset_family}'.")
 

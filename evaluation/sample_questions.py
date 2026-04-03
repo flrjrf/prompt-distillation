@@ -12,9 +12,7 @@ import httpx
 from datasets import load_dataset
 from openai import AsyncOpenAI
 from core.file_naming import generate_question_path
-from core.llm import LLM
-from core.messages import Message, Role
-from core.model_configs import MODEL_CONFIGS, get_model_config
+from core.model_configs import get_model_config
 from core.utils import generate_extra_body
 from evaluation.utils import async_wrapper
 from evaluation.utils import get_gt_answer, get_rag_context
@@ -26,22 +24,19 @@ def _extract_questions(text: str) -> List[str]:
     return questions
 
 
-def _generate_prompt_async(context: str, llm: LLM) -> str:
-    prompt = f"""Here is a chunk of text:
+def _generate_prompt_async(context: str) -> str:
+    return f"""Here is a chunk of text:
 {context}
 
-Please generate challenging five trivia questions based on this text. Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the paragraph. Do not mention the book. The questions must be understandable without access to the text. Do not output anything except the questions and format your output as in the followimg example:
+Please generate challenging five trivia questions based on this text. Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the paragraph.  The questions must be understandable without access to the text. Do not output anything except the questions and format your output as in the followimg example:
 <question>What is the capital of Japan?</question>
 <question>How many months are there in a year?</question>
 <question>What was the first name of Reagan?</question>
 <question>How many goals did Messi score during the calendar year 2012</question>
 <question>Where is the Santa Monica pier located?</question>"""
-    
-    messages = [Message(Role.USER, prompt)]
-    return llm.messages_to_prompt(messages)
 
-def _generate_prompt_async_kalamang(context: str, llm: LLM) -> str:
-    prompt = f"""Here is a chunk of text from a kalamang textbook:
+def _generate_prompt_async_kalamang(context: str) -> str:
+    return f"""Here is a chunk of text from a kalamang textbook:
 {context}
 
 Please generate challenging five trivia questions based on this text. If there are translation examples available you can use them to ask the translated version in either direction. Focus on grammar and vocabulary more than details about the book. Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the book. The questions must be understandable without access to the text. Do not output anything except the questions and format your output as in the followimg example:
@@ -51,23 +46,17 @@ Please generate challenging five trivia questions based on this text. If there a
 <question>How many goals did Messi score during the calendar year 2012</question>
 <question>Where is the Santa Monica pier located?</question>"""
 
-    messages = [Message(Role.USER, prompt)]
-    return llm.messages_to_prompt(messages)
 
-
-def _generate_prompt_async_qasper(context: str, llm: LLM) -> str:
-    prompt = f"""Here is a scientific paper:
+def _generate_prompt_async_qasper(context: str) -> str:
+    return f"""Here is a scientific paper:
 {context}
 
-Please generate challenging five trivia questions based on this paper. Focus on understanding the research methodology, key findings, contributions, and conclusions. Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the paper. The questions must be understandable without additional context. Do not output anything except the questions and format your output as in the following example:
+Please generate challenging five trivia questions based on this paper.  Do not make the questions multiple-choice. Do not assume that the person answering the questions has access to the paper. write the questions such that they can be fully understood and they makes sense without access to the text. Be specific about what paper this question is about. Do not output anything except the questions and format your output as in the following example:
 <question>What is the capital of Japan?</question>
 <question>How many months are there in a year?</question>
 <question>What was the first name of Reagan?</question>
 <question>How many goals did Messi score during the calendar year 2012</question>
 <question>Where is the Santa Monica pier located?</question>"""
-
-    messages = [Message(Role.USER, prompt)]
-    return llm.messages_to_prompt(messages)
 
 
 def _get_prompt_generator(dataset_family: str):
@@ -88,6 +77,7 @@ async def _sample_questions(
     temperature: float,
     max_tokens: int,
     needed_calls: int,
+    system_message: str = "",
     **kwargs: Dict,
 ) -> List[str]:
     """Generate question sets until needed_calls successful generations."""
@@ -95,16 +85,21 @@ async def _sample_questions(
     failures = 0
     done = 0
 
+    messages = []
+    if system_message:
+        messages.append({"role": "system", "content": system_message})
+    messages.append({"role": "user", "content": prompt})
+
     while done < needed_calls:
-        rsp = await client.completions.create(
+        rsp = await client.chat.completions.create(
             model=model,
-            prompt=prompt,
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             stream=False,
             extra_body=extra_body,
         )
-        text = rsp.choices[0].text.strip()
+        text = rsp.choices[0].message.content.strip()
         extracted = _extract_questions(text)
         if extracted and extracted[0].strip().lower() != "q1":
             qs.extend(extracted)
@@ -129,7 +124,6 @@ def main(
     vllm_hostname: str = "0.0.0.0",
 ) -> None:
     cfg = get_model_config(base)
-    llm = LLM(base, opening_message=Message(Role.SYSTEM, cfg.system_message))
 
     client = AsyncOpenAI(base_url=f"http://{vllm_hostname}:8000/v1", api_key="EMPTY")
     extra_body = generate_extra_body(base)
@@ -181,7 +175,7 @@ def main(
     # Get the appropriate prompt generator for this dataset family
     prompt_generator = _get_prompt_generator(dataset_family)
     for context in contexts:
-        prompts.append(prompt_generator(context, llm))
+        prompts.append(prompt_generator(context))
 
     print(prompts)
     print(f"Starting to generate questions to be written into {output_file}", flush=True)
@@ -195,7 +189,10 @@ def main(
             temperature,
             max_tokens,
             custom_fnc=_sample_questions,
-            custom_fnc_extra_kwargs={"needed_calls": max(1, train_questions // 5)},
+            custom_fnc_extra_kwargs={
+                "needed_calls": max(1, train_questions // 5),
+                "system_message": cfg.system_message,
+            },
         )
     )
     end_time = time.time()

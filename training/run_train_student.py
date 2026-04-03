@@ -78,6 +78,9 @@ def main(
     partition_type: Optional[str] = None,
     tulu: bool = False,
     tulu_batch_size: int = 2,
+    use_rewritten_val: bool = False,
+    train_file: str = "",
+    val_file: str = "",
 ):
     if seed:
         set_seed(seed)
@@ -105,23 +108,31 @@ def main(
     lesson_model_flags = create_model_flags(lesson_model)
     exam_model_flags = create_model_flags(exam_model)
 
-    train_file = generate_augmented_filename(
-        lesson_filename=base_lesson_id,
-        n_choices=lesson_num_choices,
-        temperature=lesson_temp,
-        model_flags=lesson_model_flags,
-        partition_idx=partition_idx,
-        partition_type=partition_type,
-        suffix="xml",
-    )
+    if train_file:
+        train_file = Path(train_file)
+    else:
+        train_file = generate_augmented_filename(
+            lesson_filename=base_lesson_id,
+            n_choices=lesson_num_choices,
+            temperature=lesson_temp,
+            model_flags=lesson_model_flags,
+            partition_idx=partition_idx,
+            partition_type=partition_type,
+            suffix="xml",
+        )
 
-    val_file = generate_augmented_filename(
-        lesson_filename=base_exam_id,
-        n_choices=exam_num_choices,
-        temperature=exam_temp,
-        model_flags=exam_model_flags,
-        suffix="xml",
-    )
+    if val_file:
+        val_file = Path(val_file)
+    else:
+        val_file = generate_augmented_filename(
+            lesson_filename=base_exam_id,
+            n_choices=exam_num_choices,
+            temperature=exam_temp,
+            model_flags=exam_model_flags,
+            suffix="xml",
+        )
+        if use_rewritten_val:
+            val_file = val_file.with_name(val_file.stem + "_rewritten.xml")
 
     if validate:
         data = [[train_file], [val_file]]

@@ -1,25 +1,22 @@
 # %%
+import asyncio
 import os
 import time
 import warnings
 import xml.etree.ElementTree as ET
 from typing import List, Tuple, Dict
 
-# Increase vLLM logging verbosity before importing
-os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
-
-import torch
-from tqdm import tqdm
-from vllm import LLM as vLLM
+from openai import AsyncOpenAI
 
 from core import DATA_PATH
 from core.file_naming import generate_augmented_filename, generate_lesson_filename, generate_exam_filename
 from core.llm import LLM
-from core.messages import Message, Role, merge_messages
-from core.model_configs import create_model_flags, MODEL_CONFIGS
-from core.utils import generate_sampling_params
+from core.messages import Message, Role
+from core.model_configs import create_model_flags, get_model_config
+from core.utils import generate_extra_body
 from curriculum.lesson import read_lessons, Lesson, Exercise
 from curriculum.exercise_with_answers import ExerciseWithAnswers, Choice, xml_dump
+from evaluation.utils import async_wrapper
 from training.utils import clean_xml_content
 
 
@@ -46,11 +43,7 @@ def generate_prompt(
         elif max_tokens_to_generate <= 0:
             raise ValueError(f"Too many tokens in the prompt: {n_tokens_prompt}, while the limit is {max_total_tokens}.")
 
-        prompt = ex.teacher_prompt
-        messages = [Message(Role.USER, prompt)]
-        messages = merge_messages(messages)
-        prompt = llm.messages_to_prompt(messages)
-        prompt = prompt.replace("&lt;", "<").replace("&gt;", ">")
+        prompt = ex.teacher_prompt.replace("&lt;", "<").replace("&gt;", ">")
 
         prompts.append((prompt, max_tokens_to_generate))
         exercises.append(ex)
@@ -100,18 +93,45 @@ def save_to_xml(lesson_id: str, exercises_with_answers: List[ExerciseWithAnswers
     print(f"Saved to {path}")
 
 
-def setup_models(base: str) -> Tuple[LLM, vLLM]:
-    """Setup LLM and vLLM models."""
-    if base not in MODEL_CONFIGS:
-        raise ValueError(f"Model '{base}' not supported. Available models: {list(MODEL_CONFIGS.keys())}")
-
-    config = MODEL_CONFIGS[base]
+def setup_models(base: str, vllm_hostname: str = "0.0.0.0") -> Tuple[LLM, AsyncOpenAI]:
+    """Setup LLM and OpenAI client."""
+    config = get_model_config(base)
     opening_message = Message(Role.SYSTEM, config.system_message)
 
     llm = LLM(base, opening_message=opening_message)
-    vllm_client = vLLM(config.vllm_model, tensor_parallel_size=torch.cuda.device_count())
+    client = AsyncOpenAI(base_url=f"http://{vllm_hostname}:8000/v1", api_key="EMPTY")
 
-    return llm, vllm_client
+    return llm, client
+
+
+async def _generate_teacher_answer(
+    client: AsyncOpenAI,
+    model: str,
+    prompt: str,
+    extra_body: Dict,
+    temperature: float,
+    max_tokens: int,
+    index: int,
+    total: int,
+    n_choices: int = 1,
+    system_message: str = "",
+) -> List[str]:
+    """Generate teacher answer(s) for a single prompt via chat completions."""
+    messages = []
+    if system_message:
+        messages.append({"role": "system", "content": system_message})
+    messages.append({"role": "user", "content": prompt})
+
+    rsp = await client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        n=n_choices,
+        stream=False,
+        extra_body=extra_body,
+    )
+    return [choice.message.content for choice in rsp.choices]
 
 
 def main(
@@ -131,12 +151,14 @@ def main(
     max_items: int = 1000,
     train_questions: int = 30,
     question_temperature: float = 1.5,
-    chunk_size: int = 10000,
+    chunk_size: int = 500,
     verbose: bool = False,
+    vllm_hostname: str = "0.0.0.0",
 ):
     assert not (generate_lesson and generate_exam), "The code doesn't support generating lesson and exam simultaneously"
     # Setup models
-    llm, vllm_client = setup_models(base)
+    llm, client = setup_models(base, vllm_hostname)
+    cfg = get_model_config(base)
     model_flags = create_model_flags(base)
 
     # Setup processing modes
@@ -152,8 +174,8 @@ def main(
     temperature = lesson_temp if generate_lesson else exam_temp
     num_choices = lesson_num_choices if generate_lesson else exam_num_choices
 
-    # Setup sampling parameters
-    sampling_params = generate_sampling_params(max_total_tokens, temperature)
+    # Setup extra body
+    extra_body = generate_extra_body(base)
     print(f"Processing {xml_name}", flush=True)
 
     # Read lessons
@@ -179,13 +201,23 @@ def main(
     # Generate answers
     start_time = time.time()
     prompts_only = [p for p, _ in prompts]
-    answers = []
 
-    for i in tqdm(range(0, len(prompts_only), chunk_size)):
-        chunk = prompts_only[i:i + chunk_size]
-        outputs = vllm_client.generate(chunk, sampling_params)
-        for output in outputs:
-            answers.append(output.outputs)
+    answers = asyncio.run(
+        async_wrapper(
+            client,
+            cfg.vllm_model,
+            prompts_only,
+            extra_body,
+            temperature,
+            max_total_tokens,
+            batch_size=chunk_size,
+            custom_fnc=_generate_teacher_answer,
+            custom_fnc_extra_kwargs={
+                "n_choices": num_choices,
+                "system_message": cfg.system_message,
+            },
+        )
+    )
 
     end_time = time.time()
     print(f"Generation time: {end_time - start_time:.4f} s", flush=True)
