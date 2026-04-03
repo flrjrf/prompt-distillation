@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -G 8
 #SBATCH -p j01
-#SBATCH -o generate_questions_%j.log
-#SBATCH --job-name=gen_questions
+#SBATCH -o rewrite_exam_%j.log
+#SBATCH --job-name=rewrite_exam
 #SBATCH --time=24:00:00
 
 source ~/fulianren/setup.sh
@@ -18,7 +18,6 @@ echo "Waiting for vllm server to start..."
 until curl -sf http://localhost:8000/health > /dev/null; do
     sleep 5
 done
-echo "vllm server is ready. Starting question generation."
+echo "vllm server is ready. Starting exam rewriting."
 
-# Run question generation jobs in parallel (use & to background, wait to join)
-python evaluation/sample_questions.py --dataset_family qasper --dataset train --max_tokens 1024 --train_questions 60 
+python evaluation/rewrite_exam.py data/qasper_train_default_20_test_t0.25.xml

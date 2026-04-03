@@ -11,4 +11,5 @@
 python curriculum/csv_to_lesson.py \
   --dataset_family=qasper \
   --dataset=train \
+  --train_questions=60
 
